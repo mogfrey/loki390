@@ -71,3 +71,42 @@ RUN apt-get update && \
     libsystemd-dev jq && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+# Install dependencies to cross build Promtail to ARM and ARM64.
+RUN dpkg --add-architecture armhf && \
+    dpkg --add-architecture arm64 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    pkg-config \
+    gcc-aarch64-linux-gnu libc6-dev-arm64-cross libsystemd-dev:arm64 \
+    gcc-arm-linux-gnueabihf libc6-dev-armhf-cross libsystemd-dev:armhf && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+COPY --from=docker /usr/bin/docker /usr/bin/docker
+COPY --from=docker /usr/libexec/docker/cli-plugins/docker-buildx /usr/libexec/docker/cli-plugins/docker-buildx
+COPY --from=helm /usr/local/bin/helm /usr/bin/helm
+COPY --from=helm /usr/local/bin/helm-docs /usr/bin/helm-docs
+COPY --from=lychee /usr/bin/lychee /usr/bin/lychee
+COPY --from=golangci /bin/golangci-lint /usr/local/bin
+COPY --from=buf /usr/bin/buf /usr/bin/buf
+COPY --from=drone /usr/local/bin/drone /usr/bin/drone
+COPY --from=faillint /go/bin/faillint /usr/bin/faillint
+COPY --from=faillint /go/bin/goimports /usr/bin/goimports
+COPY --from=delve /go/bin/dlv /usr/bin/dlv
+COPY --from=ghr /go/bin/ghr /usr/bin/ghr
+COPY --from=nfpm /go/bin/nfpm /usr/bin/nfpm
+COPY --from=gotestsum /go/bin/gotestsum /usr/bin/gotestsum
+COPY --from=jsonnet /go/bin/jb /usr/bin/jb
+COPY --from=jsonnet /go/bin/mixtool /usr/bin/mixtool
+COPY --from=jsonnet /go/bin/jsonnet /usr/bin/jsonnet
+COPY --from=trivy /usr/local/bin/trivy /usr/bin/trivy
+
+RUN GO111MODULE=on go install github.com/golang/protobuf/protoc-gen-go@v1.3.1
+RUN GO111MODULE=on go install github.com/gogo/protobuf/protoc-gen-gogoslick@v1.3.0
+RUN GO111MODULE=on go install golang.org/x/tools/cmd/goyacc@58d531046acdc757f177387bc1725bfa79895d69
+RUN GO111MODULE=on go install github.com/mitchellh/gox@9f71238 && rm -rf /go/pkg /go/src
+ENV GOCACHE=/go/cache
+ENV GOTEST="gotestsum --format testname --"
+
+COPY build.sh /
+RUN chmod +x /build.sh
+ENTRYPOINT ["/build.sh"]
